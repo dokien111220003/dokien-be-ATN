@@ -46,27 +46,31 @@ const loginUser = (userLogin) => {
                 email: email
             })
             if (checkUser === null) {
-                resolve({
+                reject({
                     status: 'ERR',
                     message: 'The user is not defined'
                 })
             }
-            const comparePassword = bcrypt.compareSync(password, checkUser.password)
+            const isPasswordMatch = await bcrypt.compare(password, checkUser.password);
 
-            if (!comparePassword) {
-                resolve({
+            if (!isPasswordMatch) {
+                reject({
                     status: 'ERR',
                     message: 'The password or user is incorrect'
                 })
             }
             const access_token = await genneralAccessToken({
                 id: checkUser.id,
-                isAdmin: checkUser.isAdmin
+                isAdmin: checkUser.isAdmin,
+                isProductManage: checkUser.isProductManage,
+                isOrderManage: checkUser.isOrderManage
             })
 
             const refresh_token = await genneralRefreshToken({
                 id: checkUser.id,
-                isAdmin: checkUser.isAdmin
+                isAdmin: checkUser.isAdmin,
+                isProductManage: checkUser.isProductManage,
+                isOrderManage: checkUser.isOrderManage
             })
             // SD khi accTK hết hạn => cấp lại 1 asTK mới
 
@@ -184,6 +188,43 @@ const getDetailsUser = (id) => {
     })
 }
 
+const createStaff = (staffData) => {
+  return new Promise(async (resolve, reject) => {
+    const { name, email, password, phone, address, isProductManage, isOrderManage } = staffData;
+    try {
+      const hash = bcrypt.hashSync(password, 10);
+      
+      const createdStaff = await User.create({
+        name,
+        email,
+        password: hash,
+        phone,
+        address,
+        isAdmin: false,
+        isProductManage: isProductManage || false,
+        isOrderManage: isOrderManage || false
+      });
+
+      if (createdStaff) {
+        resolve({
+          status: 'OK',
+          message: 'Staff account created successfully',
+          data: {
+            name: createdStaff.name,
+            email: createdStaff.email,
+            phone: createdStaff.phone,
+            address: createdStaff.address,
+            isProductManage: createdStaff.isProductManage,
+            isOrderManage: createdStaff.isOrderManage
+          }
+        });
+      }
+    } catch (e) {
+      reject(e);
+    }
+  });
+};
+
 module.exports = {
     createUser,
     loginUser,
@@ -191,5 +232,6 @@ module.exports = {
     deleteUser,
     getAllUser,
     getDetailsUser,
-    deleteManyUser
+    deleteManyUser,
+    createStaff
 }

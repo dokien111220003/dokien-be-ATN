@@ -41,7 +41,7 @@ const createOrder = (newOrder) => {
                 })
                 resolve({
                     status: 'ERR',
-                    message: `San pham voi id: ${arrId.join(',')} khong du hang`
+                    message: `Product with id: ${arrId.join(',')} does not have enough qty`
                 })
             } else {
                 const createdOrder = await Order.create({
@@ -175,7 +175,7 @@ const cancelOrderDetails = (id, data) => {
             if(newData) {
                 resolve({
                     status: 'ERR',
-                    message: `San pham voi id: ${newData} khong ton tai`
+                    message: `Product with id: ${newData} does not exit`
                 })
             }
             resolve({
@@ -204,10 +204,156 @@ const getAllOrder = () => {
     })
 }
 
+const getStatistics = (startDate, endDate) => {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Convert string dates to Date objects
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            // Debug logs
+            console.log('Date range:', { start, end });
+
+            const matchStage = {
+                createdAt: {
+                    $gte: start,
+                    $lte: end
+                }
+            };
+
+            // Debug current data
+            const allOrders = await Order.find({});
+            console.log('All orders in DB:', allOrders.length);
+            
+            // Get statistics
+            const totalOrders = await Order.countDocuments(matchStage);
+            const uniqueCustomers = await Order.distinct('shippingAddress.phone', matchStage);
+
+            const ordersByDate = await Order.aggregate([
+                { $match: matchStage },
+                {
+                    $group: {
+                        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                        count: { $sum: 1 },
+                        revenue: { $sum: "$totalPrice" }
+                    }
+                },
+                { $sort: { _id: 1 } }
+            ]);
+
+            const topSellingItems = await Order.aggregate([
+                { $match: matchStage },
+                { $unwind: "$orderItems" },
+                {
+                    $group: {
+                        _id: "$orderItems.product",
+                        productName: { $first: "$orderItems.name" },
+                        totalQuantity: { $sum: "$orderItems.amount" },
+                        totalRevenue: {
+                            $sum: {
+                                $multiply: ["$orderItems.price", "$orderItems.amount"]
+                            }
+                        }
+                    }
+                },
+                { $sort: { totalQuantity: -1 } },
+                { $limit: 5 }
+            ]);
+
+            const orderStatus = await Order.aggregate([
+                { $match: matchStage },
+                {
+                    $group: {
+                        _id: null,
+                        totalOrders: { $sum: 1 },
+                        paidOrders: {
+                            $sum: { $cond: ["$isPaid", 1, 0] }
+                        },
+                        deliveredOrders: {
+                            $sum: { $cond: ["$isDelivered", 1, 0] }
+                        },
+                        totalRevenue: { $sum: "$totalPrice" }
+                    }
+                }
+            ]);
+
+            // Debug results
+            console.log('Statistics results:', {
+                totalOrders,
+                uniqueCustomers: uniqueCustomers.length,
+                ordersByDate,
+                topSellingItems,
+                orderStatus: orderStatus[0]
+            });
+
+            resolve({
+                status: 'OK',
+                message: 'Success',
+                data: {
+                    totalOrders,
+                    uniqueCustomers: uniqueCustomers.length,
+                    ordersByDate,
+                    topSellingItems,
+                    orderStatus: orderStatus[0] || {
+                        totalOrders: 0,
+                        paidOrders: 0,
+                        deliveredOrders: 0,
+                        totalRevenue: 0
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Service error:', error);
+            reject({
+                status: 'ERR',
+                message: error.message,
+                error: error
+            });
+        }
+    });
+};
+
+const updateDeliveryStatus = (id, data) => {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const checkOrder = await Order.findOne({
+                _id: id
+            })
+            if (checkOrder === null) {
+                resolve({
+                    status: 'ERR',
+                    message: 'The order is not defined'
+                })
+            }
+
+            const updatedOrder = await Order.findByIdAndUpdate(id, 
+                { 
+                    isDelivered: data.isDelivered,
+                    deliveredAt: data.isDelivered ? new Date() : null
+                }, 
+                { new: true }
+            )
+            
+            resolve({
+                status: 'OK',
+                message: 'Update delivery status success',
+                data: updatedOrder
+            })
+        } catch (e) {
+            reject(e)
+        }
+    })
+}
+
 module.exports = {
     createOrder,
     getAllOrderDetails,
     getOrderDetails,
     cancelOrderDetails,
-    getAllOrder
+    getAllOrder,
+    getStatistics,
+    updateDeliveryStatus
 }

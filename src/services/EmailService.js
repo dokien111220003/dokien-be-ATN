@@ -15,13 +15,12 @@ const sendEmailCreateOrder = async (email,orderItems) => {
   });
   transporter.use('compile', inlineBase64({cidPrefix: 'somePrefix_'}));
 
-  let listItem = '';
+  let listItem = '';D
   const attachImage = []
   orderItems.forEach((order) => {
     listItem += `<div>
     <div>
-      Bạn đã đặt sản phẩm <b>${order.name}</b> với số lượng: <b>${order.amount}</b> và giá là: <b>${order.price} VND</b></div>
-      <div>Bên dưới là hình ảnh của sản phẩm</div>
+      You have ordered the product <b>${order.name}</b> with the quantity: <b>${order.amount}</b> and the price is: <b>${order.price} $</b></div>
     </div>`
     attachImage.push({path: order.image})
   })
@@ -30,9 +29,8 @@ const sendEmailCreateOrder = async (email,orderItems) => {
   let info = await transporter.sendMail({
     from: process.env.MAIL_ACCOUNT, // sender address
     to: email, // list of receivers
-    subject: "Bạn đã đặt hàng tại shop LẬP trình thật dễ", // Subject line
-    text: "Hello world?", // plain text body
-    html: `<div><b>Bạn đã đặt hàng thành công tại shop Lập trình thật dễ</b></div> ${listItem}`,
+    subject: "You have ordered at ATN Toys", // Subject line
+    html: `<div><b>You have ordered successfully at ATN Toys</b></div> ${listItem}`,
     attachments: attachImage,
   });
 }
